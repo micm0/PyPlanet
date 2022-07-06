@@ -38,6 +38,28 @@ class LocalRecords(AppConfig):
 			default=100
 		)
 
+		self.widget_x_setting = Setting(
+			'widget_localrecord_x', 'Position X of the widget', Setting.CAT_POSITION, type=float,
+			default=125,
+			change_target=self.position_settings_changed
+		)
+
+		self.widget_y_setting = Setting(
+			'widget_localrecord_y', 'Position Y of the widget', Setting.CAT_POSITION, type=float,
+			default=56.5,
+			change_target=self.position_settings_changed
+		)
+
+	async def get_widget_x_setting(self, *args, **kwargs):
+		return float(await self.widget_x_setting.get_value())
+	async def get_widget_y_setting(self, *args, **kwargs):
+		return float(await self.widget_y_setting.get_value())
+
+	async def position_settings_changed(self, *args, **kwargs):
+		self.widget.widget_x = await self.get_widget_x_setting()
+		self.widget.widget_y = await self.get_widget_y_setting()
+		await self.widget.refresh()
+
 	async def on_start(self):
 		# Register commands
 		await self.instance.command_manager.register(
@@ -54,7 +76,7 @@ class LocalRecords(AppConfig):
 		self.context.signals.listen(mp_signals.player.player_connect, self.player_connect)
 
 		# Register settings
-		await self.context.setting.register(self.setting_chat_announce, self.setting_record_limit)
+		await self.context.setting.register(self.setting_chat_announce, self.setting_record_limit, self.widget_x_setting, self.widget_y_setting)
 
 		# Register permissions
 		await self.instance.permission_manager.register('manage_records', 'Manage records', app=self, min_level=3)
@@ -66,7 +88,11 @@ class LocalRecords(AppConfig):
 		if self.widget is None:
 			self.widget = LocalRecordsWidget(self)
 
-		await self.widget.display()
+		# Change widget position if custom one used
+		if self.widget.widget_x != await self.get_widget_x_setting() or self.widget.widget_y != await self.get_widget_y_setting():
+			await self.position_settings_changed()
+		else:
+			await self.widget.display()
 
 	async def load_map_locals(self, map=None):
 		if map:
