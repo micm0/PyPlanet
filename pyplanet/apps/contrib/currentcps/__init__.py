@@ -3,6 +3,7 @@ import logging
 from pyplanet.apps.config import AppConfig
 from pyplanet.apps.core.trackmania import callbacks as tm_signals
 from pyplanet.apps.core.maniaplanet import callbacks as mp_signals
+from pyplanet.contrib.setting.setting import Setting
 
 from .view import CPWidgetView
 
@@ -19,6 +20,28 @@ class CurrentCPs(AppConfig):
 		self.player_cps = []  # Holds the sorted PlayerCP objects (these get displayed by the widget)
 
 		self.dedimania_enabled = False
+
+		self.widget_x_setting = Setting(
+			'widget_currentcps_x', 'Position X of the widget', Setting.CAT_POSITION, type=float,
+			default=-160,
+			change_target=self.position_settings_changed
+		)
+
+		self.widget_y_setting = Setting(
+			'widget_currentcps_y', 'Position Y of the widget', Setting.CAT_POSITION, type=float,
+			default=70.5,
+			change_target=self.position_settings_changed
+		)
+
+	async def get_widget_x_setting(self, *args, **kwargs):
+		return float(await self.widget_x_setting.get_value())
+	async def get_widget_y_setting(self, *args, **kwargs):
+		return float(await self.widget_y_setting.get_value())
+
+	async def position_settings_changed(self, *args, **kwargs):
+		self.widget.widget_x = await self.get_widget_x_setting()
+		self.widget.widget_y = await self.get_widget_y_setting()
+		await self.update_view()
 
 	# FOR TESTING ONLY, DO NOT USE IN PRODUCTION CODE
 	def fill_test_cps(self):
@@ -56,6 +79,11 @@ class CurrentCPs(AppConfig):
 		self.context.signals.listen(mp_signals.map.map_start__end, self.map_start)
 		self.context.signals.listen(mp_signals.player.player_enter_spectator_slot, self.player_enter_spec)
 
+		# Init settings.
+		await self.context.setting.register(
+			self.widget_x_setting, self.widget_y_setting
+		)
+
 		# Make sure we move the rounds_scores and other gui elements.
 		if self.instance.game.game in ['tm', 'sm']:
 			self.instance.ui_manager.properties.set_attribute('round_scores', 'pos', '-126.5 80. 150.')
@@ -65,7 +93,12 @@ class CurrentCPs(AppConfig):
 
 		self.widget = CPWidgetView(self)
 		# await self.widget.display()
-		await self.update_view()
+
+		# Change widget position if custom one used
+		if self.widget.widget_x != await self.get_widget_x_setting() or self.widget.widget_y != await self.get_widget_y_setting():
+			await self.position_settings_changed()
+		else:
+			await self.update_view()
 
 	# When a player passes a CP
 	async def player_cp(self, player, race_time, raw, *args, **kwargs):
