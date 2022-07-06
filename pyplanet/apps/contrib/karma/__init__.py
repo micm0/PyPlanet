@@ -41,7 +41,29 @@ class Karma(AppConfig):
 			default=0
 		)
 
+		self.widget_x_setting = Setting(
+			'widget_currentcps_x', 'Position X of the widget', Setting.CAT_POSITION, type=float,
+			default=125,
+			change_target=self.position_settings_changed
+		)
+
+		self.widget_y_setting = Setting(
+			'widget_currentcps_y', 'Position Y of the widget', Setting.CAT_POSITION, type=float,
+			default=70,
+			change_target=self.position_settings_changed
+		)
+
 		self.mx_karma = MXKarma(self)
+
+	async def get_widget_x_setting(self, *args, **kwargs):
+		return float(await self.widget_x_setting.get_value())
+	async def get_widget_y_setting(self, *args, **kwargs):
+		return float(await self.widget_y_setting.get_value())
+
+	async def position_settings_changed(self, *args, **kwargs):
+		self.widget.widget_x = await self.get_widget_x_setting()
+		self.widget.widget_y = await self.get_widget_y_setting()
+		await self.widget.display()
 
 	async def on_start(self):
 		# Register commands.
@@ -54,7 +76,7 @@ class Karma(AppConfig):
 		self.context.signals.listen(mp_signals.player.player_chat, self.player_chat)
 		self.context.signals.listen(mp_signals.player.player_connect, self.player_connect)
 
-		await self.context.setting.register(self.setting_finishes_before_voting, self.setting_expanded_voting)
+		await self.context.setting.register(self.setting_finishes_before_voting, self.setting_expanded_voting, self.widget_x_setting, self.widget_y_setting)
 
 		# Load initial data.
 		await self.get_votes_list(self.instance.map_manager.current_map)
@@ -64,7 +86,12 @@ class Karma(AppConfig):
 		await self.chat_current_karma()
 
 		self.widget = KarmaWidget(self)
-		await self.widget.display()
+
+		# Change widget position if custom one used
+		if self.widget.widget_x != await self.get_widget_x_setting() or self.widget.widget_y != await self.get_widget_y_setting():
+			await self.position_settings_changed()
+		else:
+			await self.widget.display()
 
 		await self.load_map_votes()
 
